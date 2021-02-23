@@ -1,0 +1,18 @@
+<link rel="stylesheet" href="dist/daterangepicker.min.css">
+<script type="text/javascript" src="moment.min.js"></script>
+<script type="text/javascript" src="jquery.min.js"></script>
+<script type="text/javascript" src="dist/jquery.daterangepicker.min.js"></script>
+<script>$('#datePicker').dateRangePicker()</script>
+
+<div class="center">
+    <select class="dropdown" id="select">
+        <option id="devicePicker" value="" selected disabled hidden>Select a device</option>
+    </select>
+    <input class="dropdown" id="datePicker" placeholder="Select a timeframe"> 
+</div>
+<h6><div id="user-interaction"></div></h6>
+
+<div id="wrapper">
+    <button id="download" type="button">Download Data</button>
+    <button id="report" type="button">Generate Report</button>
+</div>
