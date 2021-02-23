@@ -1,6 +1,4 @@
 # penn-thingsboard-research
-Update: 02/23/21
--Initial Commit
 This repository holds code that I've written for the ThingsBoard interface as part of my Masters research at the University of 
 Pennsylvania. Each folder contains three files: a JavaScript file for data processing and dynamic front-end interface development,
 and HTML/CSS files for styling of the card. Functionality of each widget is detailed below:
