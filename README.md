@@ -3,7 +3,7 @@ This repository holds code that I've written for the ThingsBoard interface as pa
 Pennsylvania. Each folder contains three files: a JavaScript file for data processing and dynamic front-end interface development,
 and HTML/CSS files for styling of the widget. Functionality of each widget is detailed below:
 
-## **download-data-generate-report-widget:**
+#### **download-data-generate-report-widget**
 
 This widget was developed to allow clinicians to download device data in a specified time range and also generate a report on SpO2 data (time above/below certain values)
 
