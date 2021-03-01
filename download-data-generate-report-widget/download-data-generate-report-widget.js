@@ -9,7 +9,7 @@ self.onInit = function() {
     var downloadButton = document.getElementById(
             "download"),
         reportButton = document.getElementById(
-        "report");
+            "report");
 
     getDevices();
 
@@ -53,6 +53,7 @@ const buttonClickAction = function(action) {
     }
 
     $("#download").prop('disabled', true)
+    $("#report").prop('disabled', true)
     $("#select").prop('disabled', true)
     $("#datePicker").prop('disabled', true)
     document.getElementById("user-interaction")
@@ -72,34 +73,86 @@ const buttonClickAction = function(action) {
 
     if (action == "download") {
         result.forEach((data) => {
-            downloadData(dataToCsv(data,
-                    startDate,
-                    endDate), deviceName,
+            downloadData(dataToCsv(data),
+                deviceName,
                 startDate, endDate);
         });
     }
 
     if (action == "generate report") {
         result.forEach((data) => {
-            analyzeData(data)
+            downloadData(analyzeData(data),
+                deviceName, startDate,
+                endDate)
         });
     }
 }
 
 const analyzeData = function(data) {
+    const csvRows = [];
+    const dataReport = {
+        timeAbove94: 0,
+        timeBetween90And94: 0,
+        timeBetween85and89: 0,
+        timeBetween80and84: 0,
+        timeBelow80: 0
+    };
 
     for (i = data.data.length - 1; i >= 0; i--) {
         var value = formatJsonData(data.data[i].value)
         for (const key in value) {
             var variable = value[key].split(':')[0]
+            var spo2Value = value[key].split(':')[1]
             if (variable == "SpO2") {
-                // get value, analyze and store
+                if (spo2Value >= 95) {
+                    dataReport['timeAbove94'] += 1
+                } else if (spo2Value >= 90) {
+                    dataReport['timeBetween90And94'] +=
+                        1
+                } else if (spo2Value >= 85) {
+                    dataReport['timeBetween85and89'] +=
+                        1
+                } else if (spo2Value >= 80) {
+                    dataReport['timeBetween80and84'] +=
+                        1
+                } else {
+                    dataReport['timeBelow80'] += 1
+                }
             }
         }
     }
+    
+    var newRow = "This report shows total oxygen saturation concentrations at various levels."
+    csvRows.push(newRow)
+
+    var newRow =
+        'Total time at 95% oxygen saturation or above (seconds), '
+    newRow += dataReport['timeAbove94']
+    csvRows.push(newRow)
+
+    newRow =
+        'Total time between 90-94% oxygen saturation (seconds), '
+    newRow += dataReport['timeBetween90And94']
+    csvRows.push(newRow)
+
+    newRow =
+        'Total time between 85-89% oxygen saturation (seconds), '
+    newRow += dataReport['timeBetween85and89']
+    csvRows.push(newRow)
+
+    newRow =
+        'Total time between 80-84% oxygen saturation (seconds), '
+    newRow += dataReport['timeBetween80and84']
+    csvRows.push(newRow)
+
+    newRow = 'Total time below 80% oxygen saturation (seconds), '
+    newRow += dataReport['timeBelow80']
+    csvRows.push(newRow)
+
+    return csvRows.join('\n')
 }
 
-const dataToCsv = function(data, startDate, endDate) {
+const dataToCsv = function(data) {
     const csvRows = [];
 
     // get headers and populate csvRows
@@ -152,6 +205,7 @@ const downloadData = function(data, deviceName, startDate,
 
     // Reset card
     $("#download").removeAttr('disabled')
+    $("#report").removeAttr('disabled')
     $("#select").removeAttr('disabled')
     $("#datePicker").removeAttr('disabled')
     document.getElementById("user-interaction")
