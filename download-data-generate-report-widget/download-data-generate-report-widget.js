@@ -1,8 +1,11 @@
 self.onInit = function() {
-
+    
+    
     var configObject = {
-        maxDays: 30
+        // Max days chosen in UI can be configured here
+        // maxDays: 30
     };
+    
 
     $('#datePicker').dateRangePicker(configObject);
 
@@ -98,11 +101,22 @@ const analyzeData = function(data) {
         timeBelow80: 0
     };
 
-    for (i = data.data.length - 1; i >= 0; i--) {
+    var sum = 0,
+        dataLength = data.data.length
+        startTime = 0,
+        endTime = 0;
+        
+
+    for (i = dataLength - 1; i >= 0; i--) {
         var value = formatJsonData(data.data[i].value)
+        endTime = data.data[0].ts
+        startTime = data.data[dataLength - 1].ts
         for (const key in value) {
             var variable = value[key].split(':')[0]
             var spo2Value = value[key].split(':')[1]
+            sum += parseFloat(spo2Value)
+
+            // check SpO2 value
             if (variable == "SpO2") {
                 if (spo2Value >= 95) {
                     dataReport['timeAbove94'] += 1
@@ -122,32 +136,96 @@ const analyzeData = function(data) {
         }
     }
     
-    var newRow = "This report shows total oxygen saturation concentrations at various levels."
+    var newRow = "Analysis Result "
     csvRows.push(newRow)
 
-    var newRow =
-        'Total time at 95% oxygen saturation or above (seconds), '
-    newRow += dataReport['timeAbove94']
+    csvRows.push(',')
+
+    newRow = 'Total Number of Data: ,'
+    newRow += dataLength
     csvRows.push(newRow)
 
-    newRow =
-        'Total time between 90-94% oxygen saturation (seconds), '
-    newRow += dataReport['timeBetween90And94']
+    newRow = 'Days: ,'
+    newRow += Math.round((endTime - startTime) / 86000000) 
     csvRows.push(newRow)
 
-    newRow =
-        'Total time between 85-89% oxygen saturation (seconds), '
-    newRow += dataReport['timeBetween85and89']
+    newRow = 'Mean: ,'
+    newRow += (sum / dataLength).toFixed(2)
     csvRows.push(newRow)
 
-    newRow =
-        'Total time between 80-84% oxygen saturation (seconds), '
-    newRow += dataReport['timeBetween80and84']
+    newRow = 'Std: ,'
+    newRow += 0
     csvRows.push(newRow)
 
-    newRow = 'Total time below 80% oxygen saturation (seconds), '
-    newRow += dataReport['timeBelow80']
+    newRow = 'High Quality - Number of Data: ,'
+    newRow += 0 + ','
+    newRow += 'Percentage:,'
+    newRow += 0
     csvRows.push(newRow)
+
+    newRow = 'Low Quality - Number of Data: ,'
+    newRow += 0 + ','
+    newRow += 'Percentage:,'
+    newRow += 0
+    csvRows.push(newRow)
+
+    csvRows.push(',')
+    
+    newRow = 'Saturation Times'
+    csvRows.push(newRow)
+    
+    newRow = 'SpO2 percentage,'
+    newRow += 'Number of Data, '
+    newRow += 'Percentage'
+    csvRows.push(newRow)
+    
+    newRow = '> 94%,'
+    newRow += dataReport['timeAbove94'] + ','
+    newRow += (dataReport['timeAbove94'] / data.data.length * 100).toFixed(2)
+    csvRows.push(newRow)
+
+    newRow = '90-94%,'
+    newRow += dataReport['timeBetween90And94'] + ','
+    newRow += (dataReport['timeBetween90And94'] / data.data.length * 100).toFixed(2)
+    csvRows.push(newRow)
+
+    newRow = '85-89%,'
+    newRow += dataReport['timeBetween85and89'] + ','
+    newRow += (dataReport['timeBetween85and89'] / data.data.length * 100).toFixed(2)
+    csvRows.push(newRow)
+
+    newRow = '80-84%,'
+    newRow += dataReport['timeBetween80and84'] + ','
+    newRow += (dataReport['timeBetween80and84'] / data.data.length * 100).toFixed(2)
+    csvRows.push(newRow)
+
+    newRow = '< 80%,'
+    newRow += dataReport['timeBelow80'] + ','
+    newRow += (dataReport['timeBelow80'] / data.data.length * 100).toFixed(2)
+    csvRows.push(newRow)
+    
+    newRow = '< 85%; < 30 sec,'
+    newRow += 0 + ','
+    newRow += 0
+    csvRows.push(newRow)
+    
+    newRow = '< 85%; >= 30 sec,'
+    newRow += 0 + ','
+    newRow += 0
+    csvRows.push(newRow)
+    
+    newRow = '< 85%; >= 60 sec,'
+    newRow += 0 + ','
+    newRow += 0
+    csvRows.push(newRow)
+    
+    csvRows.push(',')
+    
+    newRow = 'Data Collected Time'
+    newRow += csvRows.push(newRow)
+    
+    newRow = 'Per Day'
+    newRow += csvRows.push(newRow)
 
     return csvRows.join('\n')
 }
