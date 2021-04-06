@@ -64,7 +64,7 @@ const buttonClickAction = function(action) {
     ////////////////////////
     //// Call Data API ////
     ///////////////////////
-    
+
     const result = http.get(
         '/api/plugins/telemetry/DEVICE/' +
         deviceId.toString() +
@@ -96,7 +96,7 @@ const buttonClickAction = function(action) {
 const analyzeData = function(data) {
     const csvRows = [];
     var spo2Values = [];
-    
+
     const dataBySat = {
         valuesAbove94: [],
         valuesBetween90And94: [],
@@ -110,20 +110,20 @@ const analyzeData = function(data) {
         timesBelow85: [],
         timesBelow80: []
     }
-    
+
     const splitByDay = {};
     const splitByWeek = {};
-    
+
     var sum = 0,
         dataLength = data.data.length
-    
-    
+
+
     startTime = data.data[dataLength - 1].ts,
         endTime = data.data[0].ts;
 
     var highQualityData = 0,
         lowQualityData = 0;
-        
+
     ////////////////////////
     /// Saturation Rates ///
     ///////////////////////
@@ -131,8 +131,9 @@ const analyzeData = function(data) {
     for (i = dataLength - 1; i >= 0; i--) {
         var value = formatJsonData(data.data[i].value)
         var ts = data.data[i].ts
-        
-        
+        var startTs = data.data[0].ts
+
+
         for (const key in value) {
             var variable = value[key].split(':')[0]
 
@@ -169,28 +170,57 @@ const analyzeData = function(data) {
 
                 // Get sum for mean 
                 sum += spo2Value
-                
-                // Check high, low quality data
-                if(i < dataLength - 1){
-                    var prevTs = data.data[i+1].ts
-                    var prevValue = formatJsonData(data.data[i+1].value)
 
-                    if(Math.ceil((ts - prevTs)/1000) <= 30){
-                        highQualityData += 1
-                    }else {
-                        lowQualityData += 1
+                // Check high, low quality data
+                tempArr = []
+                if (i < dataLength - 2) {
+                    var prevTs = data.data[i + 1].ts
+                    var prevValue = formatJsonData(data
+                        .data[i + 1].value)
+                    var prevprevValue = formatJsonData(
+                        data.data[i + 2].value)
+
+                    if (prevValue == value && Math.ceil(
+                            (ts - prevTs) / 1000) <=
+                        30 && tempArray.length > 0) {
+                        tempArr.push(ts)
+                        deltaTs = tempArr[tempArr
+                            .length - 1] - tempArr[
+                            0]
+
+                        if (deltaTs > 30) {
+                            highQualityData += 1
+                        }
+                    } else if (prevValue != value &&
+                        Math.ceil((ts - prevTs) /
+                            1000) > 300) {
+                        if (tempArr.length == 0) {
+                            tempArr.push(ts)
+                        } else {
+                            deltaTs = tempArr[tempArr
+                                    .length - 1] -
+                                tempArr[0]
+                            if (deltaTs > 30) {
+                                highQualityData += 1
+                            } else if (deltaTs <
+                                3 && value ==
+                                prevprevValue) {
+                                lowQualityData += 1
+                            }
+
+                        }
                     }
+                    
                 }
             }
-
         }
     }
-    
-    
+
+
     ////////////////////////
     //// Calculate STD ////
     ///////////////////////
-    
+
     var standardDeviation = 0;
     mean = sum / dataLength;
 
@@ -207,23 +237,25 @@ const analyzeData = function(data) {
     ////////////////////////
     ///// < 80, < 85 //////
     ///////////////////////
-    
+
     var eightyLessThanThirtySecCount = 0,
         eightyGreaterThanThirtySecCount = 0,
         eightyGreaterThanSixtySecCount = 0;
 
     var eightyLessThanThirtySec = {}
-        eightyGreaterThanThirtySec = {}
-        eightyGreaterThanSixtySec = {};
+    eightyGreaterThanThirtySec = {}
+    eightyGreaterThanSixtySec = {};
 
     var startTime = dataByTime.timesBelow80[0],
         tempCount = 1;
-    
-        
-    for (i = 1; i < dataByTime['timesBelow80'].length; i++) {
+
+
+    for (i = 1; i < dataByTime['timesBelow80']
+        .length; i++) {
         currentTime = dataByTime['timesBelow80'][i]
         previousTime = dataByTime['timesBelow80'][i - 1]
-        var timeDiff = Math.round((currentTime - startTime)/ 1000)
+        var timeDiff = Math.round((currentTime -
+            startTime) / 1000)
 
         if (timeDiff <= 1) {
             tempCount += 1
@@ -231,94 +263,126 @@ const analyzeData = function(data) {
             startTime = currentTime
         } else if (tempCount < 30) {
             eightyLessThanThirtySec[moment(
-                startTime).format('YYYY-MM-DD HH:mm:ss') + '  -  ' + moment(previousTime).format('YYYY-MM-DD HH:mm:ss')] = tempCount
+                        startTime).format(
+                        'YYYY-MM-DD HH:mm:ss') +
+                    '  -  ' + moment(previousTime)
+                    .format('YYYY-MM-DD HH:mm:ss')] =
+                tempCount
             eightyLessThanThirtySecCount += tempCount
             startTime = currentTime
             tempCount = 1
         } else if (tempCount > 60) {
             eightyGreaterThanSixtySec[moment(
-                startTime).format('YYYY-MM-DD HH:mm:ss') + '  -  ' + moment(previousTime).format('YYYY-MM-DD HH:mm:ss')] = tempCount
+                        startTime).format(
+                        'YYYY-MM-DD HH:mm:ss') +
+                    '  -  ' + moment(previousTime)
+                    .format('YYYY-MM-DD HH:mm:ss')] =
+                tempCount
             eightyGreaterThanSixtySec += tempCount
             startTime = currentTime
             tempCount = 1
         } else {
             eightyGreaterThanThirtySec[moment(
-                startTime).format('YYYY-MM-DD HH:mm:ss') + '  -  ' + moment(previousTime).format('YYYY-MM-DD HH:mm:ss')] = tempCount
+                        startTime).format(
+                        'YYYY-MM-DD HH:mm:ss') +
+                    '  -  ' + moment(previousTime)
+                    .format('YYYY-MM-DD HH:mm:ss')] =
+                tempCount
             eightyGreaterThanThirtySec += tempCount
             startTime = currentTime
             tempCount = 1
         }
     }
-    
+
 
     var eightyFiveLessThanThirtySecCount = 0,
         eightyFiveGreaterThanThirtySecCount = 0,
         eightyFiveGreaterThanSixtySecCount = 0;
 
     var eightyFiveLessThanThirtySec = {}
-        eightyFiveGreaterThanThirtySec = {}
-        eightyFiveGreaterThanSixtySec = {};
+    eightyFiveGreaterThanThirtySec = {}
+    eightyFiveGreaterThanSixtySec = {};
 
     var startTime = dataByTime.timesBelow85[0],
         tempCount = 1;
-        
-    for (i = 1; i < dataByTime['timesBelow85'].length; i++) {
+
+    for (i = 1; i < dataByTime['timesBelow85']
+        .length; i++) {
         currentTime = dataByTime['timesBelow85'][i]
         previousTime = dataByTime['timesBelow85'][i - 1]
-        var timeDiff = Math.round((currentTime - startTime) / 1000)
+        var timeDiff = Math.round((currentTime -
+            startTime) / 1000)
         if (timeDiff == 1) {
             tempCount += 1
         } else if (tempCount == 1) {
             startTime = currentTime
         } else if (tempCount < 30) {
             eightyFiveLessThanThirtySec[moment(
-                startTime).format('YYYY-MM-DD HH:mm:ss') + '  -  ' + moment(previousTime).format('YYYY-MM-DD HH:mm:ss')] = tempCount
-            eightyFiveLessThanThirtySecCount += tempCount
+                        startTime).format(
+                        'YYYY-MM-DD HH:mm:ss') +
+                    '  -  ' + moment(previousTime)
+                    .format('YYYY-MM-DD HH:mm:ss')] =
+                tempCount
+            eightyFiveLessThanThirtySecCount +=
+                tempCount
             startTime = currentTime
             tempCount = 1
         } else if (tempCount > 60) {
             eightyFiveGreaterThanSixtySec[moment(
-                startTime).format('YYYY-MM-DD HH:mm:ss') + '  -  ' + moment(previousTime).format('YYYY-MM-DD HH:mm:ss')] = tempCount
-            eightyFiveGreaterThanSixtySecCount += tempCount
+                        startTime).format(
+                        'YYYY-MM-DD HH:mm:ss') +
+                    '  -  ' + moment(previousTime)
+                    .format('YYYY-MM-DD HH:mm:ss')] =
+                tempCount
+            eightyFiveGreaterThanSixtySecCount +=
+                tempCount
             startTime = currentTime
             tempCount = 1
         } else {
             eightyFiveGreaterThanThirtySec[moment(
-                startTime).format('YYYY-MM-DD HH:mm:ss') + '  -  ' + moment(previousTime).format('YYYY-MM-DD HH:mm:ss')] = tempCount
-            eightyFiveGreaterThanThirtySecCount += tempCount
+                        startTime).format(
+                        'YYYY-MM-DD HH:mm:ss') +
+                    '  -  ' + moment(previousTime)
+                    .format('YYYY-MM-DD HH:mm:ss')] =
+                tempCount
+            eightyFiveGreaterThanThirtySecCount +=
+                tempCount
             startTime = currentTime
             tempCount = 1
         }
     }
-    
+
     ////////////////////////
     // Split by day, week /
     ///////////////////////
-    
+
     startTime = dataByTime.allTimes[0]
     timesByDay = {};
     timesByWeek = {};
-    
-    
-    for(i = 0; i < dataByTime.allTimes.length; i++){
+
+
+    for (i = 0; i < dataByTime.allTimes.length; i++) {
         currentTime = dataByTime.allTimes[i]
         previousTime = dataByTime.allTimes[i - 1]
         tempCount == 0
-        if((currentTime - startTime) / 86400000 > 1 || i == dataByTime.allTimes.length - 1){
-            timesByDay[moment(startTime).format('MM-DD-YYYY')] = moment.utc(tempCount * 1000).format('HH:mm:ss')
+        if ((currentTime - startTime) / 86400000 > 1 ||
+            i == dataByTime.allTimes.length - 1) {
+            timesByDay[moment(startTime).format(
+                'MM-DD-YYYY')] = moment.utc(
+                tempCount * 1000).format('HH:mm:ss')
             startTime = currentTime
-            tempCount = 0 
+            tempCount = 0
         } else {
             tempCount += 1
         }
     }
-    
+
     startTime = dataByTime.allTimes[0]
-    
+
     ////////////////////////
     //// Push to rows ////
     ///////////////////////
-    
+
     var newRow = "Analysis Result "
     csvRows.push(newRow)
 
@@ -344,13 +408,15 @@ const analyzeData = function(data) {
     newRow = 'High Quality - Number of Data: ,'
     newRow += highQualityData + ','
     newRow += 'Percentage:,'
-    newRow += (highQualityData/dataLength * 100).toFixed(2)
+    newRow += (highQualityData / dataLength * 100)
+        .toFixed(2)
     csvRows.push(newRow)
 
     newRow = 'Low Quality - Number of Data: ,'
     newRow += lowQualityData + ','
     newRow += 'Percentage:,'
-    newRow += (lowQualityData/dataLength * 100).toFixed(2)
+    newRow += (lowQualityData / dataLength * 100)
+        .toFixed(2)
     csvRows.push(newRow)
 
     csvRows.push(',')
@@ -397,98 +463,123 @@ const analyzeData = function(data) {
     csvRows.push(newRow)
 
     newRow = '< 80% - < 30 sec,'
-    newRow +=  eightyLessThanThirtySecCount + ','
-    newRow += (eightyLessThanThirtySecCount/dataLength * 100).toFixed(2)
+    newRow += eightyLessThanThirtySecCount + ','
+    newRow += (eightyLessThanThirtySecCount /
+        dataLength * 100).toFixed(2)
     csvRows.push(newRow)
-    
-    if (Object.keys(eightyLessThanThirtySec).length != 0){
+
+    if (Object.keys(eightyLessThanThirtySec).length !=
+        0) {
         newRow = ','
         newRow += 'Events'
         csvRows.push(newRow)
-        for (key in eightyLessThanThirtySec){
-        newRow = ',' + 'Duration: ' + eightyLessThanThirtySec[key] + ' seconds - '
-        newRow += key
-        csvRows.push(newRow)
+        for (key in eightyLessThanThirtySec) {
+            newRow = ',' + 'Duration: ' +
+                eightyLessThanThirtySec[key] +
+                ' seconds - '
+            newRow += key
+            csvRows.push(newRow)
         }
     }
-    
+
     newRow = '< 80% - >= 30 sec,'
     newRow += eightyGreaterThanThirtySecCount + ','
-    newRow += (eightyGreaterThanThirtySecCount/dataLength * 100).toFixed(2)
+    newRow += (eightyGreaterThanThirtySecCount /
+        dataLength * 100).toFixed(2)
     csvRows.push(newRow)
-    
-    if (Object.keys(eightyGreaterThanThirtySec).length > 0){
+
+    if (Object.keys(eightyGreaterThanThirtySec).length >
+        0) {
         newRow = ','
         newRow += 'Events'
         csvRows.push(newRow)
-        for (key in eightyGreaterThanThirtySec){
-        newRow = ',' + 'Duration: ' + eightyGreaterThanThirtySec[key] + ' seconds - '
-        newRow += key
-        csvRows.push(newRow)
+        for (key in eightyGreaterThanThirtySec) {
+            newRow = ',' + 'Duration: ' +
+                eightyGreaterThanThirtySec[key] +
+                ' seconds - '
+            newRow += key
+            csvRows.push(newRow)
         }
     }
 
     newRow = '< 80% - >= 60 sec,'
     newRow += eightyGreaterThanSixtySecCount + ','
-    newRow += (eightyGreaterThanSixtySecCount/dataLength * 100).toFixed(2)
+    newRow += (eightyGreaterThanSixtySecCount /
+        dataLength * 100).toFixed(2)
     csvRows.push(newRow)
-    
-    if (Object.keys(eightyGreaterThanSixtySec).length != 0){
+
+    if (Object.keys(eightyGreaterThanSixtySec).length !=
+        0) {
         newRow = ','
         newRow += 'Events'
         csvRows.push(newRow)
-        for (key in eightyGreaterThanSixtySec){
-        newRow = ',' + 'Duration: ' + eightyGreaterThanSixtySec[key] + ' seconds - '
-        newRow += key
-        csvRows.push(newRow)
+        for (key in eightyGreaterThanSixtySec) {
+            newRow = ',' + 'Duration: ' +
+                eightyGreaterThanSixtySec[key] +
+                ' seconds - '
+            newRow += key
+            csvRows.push(newRow)
         }
     }
 
     newRow = '< 85% - < 30 sec,'
     newRow += eightyFiveLessThanThirtySecCount + ','
-    newRow += (eightyFiveLessThanThirtySecCount/dataLength * 100).toFixed(2)
+    newRow += (eightyFiveLessThanThirtySecCount /
+        dataLength * 100).toFixed(2)
     csvRows.push(newRow)
-    
-    if (Object.keys(eightyFiveLessThanThirtySec).length != 0){
+
+    if (Object.keys(eightyFiveLessThanThirtySec)
+        .length != 0) {
         newRow = ','
         newRow += 'Events'
         csvRows.push(newRow)
-        for (key in eightyFiveLessThanThirtySec){
-        newRow = ',' + 'Duration: ' + eightyFiveLessThanThirtySec[key] + ' seconds - '
-        newRow += key
-        csvRows.push(newRow)
+        for (key in eightyFiveLessThanThirtySec) {
+            newRow = ',' + 'Duration: ' +
+                eightyFiveLessThanThirtySec[key] +
+                ' seconds - '
+            newRow += key
+            csvRows.push(newRow)
         }
     }
 
     newRow = '< 85% - >= 30 sec,'
     newRow += eightyFiveGreaterThanThirtySecCount + ','
-    newRow += (eightyFiveGreaterThanThirtySecCount/dataLength * 100).toFixed(2)
+    newRow += (eightyFiveGreaterThanThirtySecCount /
+        dataLength * 100).toFixed(2)
     csvRows.push(newRow)
-    
-    if (Object.keys(eightyFiveGreaterThanThirtySec).length != 0){
+
+    if (Object.keys(eightyFiveGreaterThanThirtySec)
+        .length != 0) {
         newRow = ','
         newRow += 'Events'
         csvRows.push(newRow)
-        for (key in eightyFiveGreaterThanThirtySecCount){
-        newRow = ',' + 'Duration: ' + eightyFiveGreaterThanThirtySecCount[key] + ' seconds - '
-        newRow += key
-        csvRows.push(newRow)
+        for (key in
+            eightyFiveGreaterThanThirtySecCount) {
+            newRow = ',' + 'Duration: ' +
+                eightyFiveGreaterThanThirtySecCount[
+                    key] + ' seconds - '
+            newRow += key
+            csvRows.push(newRow)
         }
     }
 
     newRow = '< 85% - >= 60 sec,'
     newRow += eightyFiveGreaterThanSixtySecCount + ','
-    newRow += (eightyFiveGreaterThanSixtySecCount/dataLength * 100).toFixed(2)
+    newRow += (eightyFiveGreaterThanSixtySecCount /
+        dataLength * 100).toFixed(2)
     csvRows.push(newRow)
-    
-    if (Object.keys(eightyFiveGreaterThanSixtySec).length != 0){
+
+    if (Object.keys(eightyFiveGreaterThanSixtySec)
+        .length != 0) {
         newRow = ','
         newRow += 'Events'
         csvRows.push(newRow)
-        for (key in eightyFiveGreaterThanSixtySec){
-        newRow = ',' + 'Duration: ' + eightyFiveGreaterThanSixtySec[key] + ' seconds - '
-        newRow += key
-        csvRows.push(newRow)
+        for (key in eightyFiveGreaterThanSixtySec) {
+            newRow = ',' + 'Duration: ' +
+                eightyFiveGreaterThanSixtySec[key] +
+                ' seconds - '
+            newRow += key
+            csvRows.push(newRow)
         }
     }
 
@@ -499,45 +590,51 @@ const analyzeData = function(data) {
 
     newRow = 'Per Day'
     csvRows.push(newRow)
-    
+
     var total = formatSecondsTime(dataLength)
-    
-    for (key in timesByDay){
+
+    for (key in timesByDay) {
         newRow = ',' + key + ': ' + timesByDay[key]
         csvRows.push(newRow)
     }
-    
+
     newRow = 'Per Week'
     csvRows.push(newRow)
     var dates = Object.keys(timesByDay),
         weekStart = dates[0],
-        totalTime = moment.duration(timesByDay[weekStart]).asSeconds
-        ();
-    
-    for(i = 0; i < dates.length - 1; i++){
+        totalTime = moment.duration(timesByDay[
+            weekStart]).asSeconds();
+
+    for (i = 0; i < dates.length - 1; i++) {
         var currentDay = dates[i + 1],
-            diff = Math.ceil((moment(currentDay) - moment(weekStart)) / 86400000) + 1,
-            timePeriod = moment.duration(timesByDay[currentDay]).asSeconds();
+            diff = Math.ceil((moment(currentDay) -
+                moment(weekStart)) / 86400000) + 1,
+            timePeriod = moment.duration(timesByDay[
+                currentDay]).asSeconds();
         totalTime += timePeriod
-        
-        if (diff == 8){
-            newRow = ',' + weekStart + ' - ' + currentDay + ': ' + formatSecondsTime(totalTime)
+
+        if (diff == 8) {
+            newRow = ',' + weekStart + ' - ' +
+                currentDay + ': ' + formatSecondsTime(
+                    totalTime)
             weekStart = dates[i + 2]
             totalTime = 0
             csvRows.push(newRow)
         } else if (i == dates.length - 2) {
-            newRow = ',' + weekStart + ' - ' + currentDay + ': ' + formatSecondsTime(totalTime)
+            newRow = ',' + weekStart + ' - ' +
+                currentDay + ': ' + formatSecondsTime(
+                    totalTime)
             csvRows.push(newRow)
-        } 
+        }
     }
-    
+
 
     newRow = 'Total' + ','
     newRow += total
     csvRows.push(newRow)
-    
+
     return csvRows.join('\n')
-    
+
 }
 
 const dataToCsv = function(data) {
@@ -573,6 +670,10 @@ const dataToCsv = function(data) {
 const downloadData = function(data, deviceName, startDate,
     endDate) {
 
+    ////////////////////////
+    //// Download as CSV ///
+    ///////////////////////
+
     const blob = new Blob([data], {
         type: 'text/csv'
     });
@@ -601,6 +702,10 @@ const downloadData = function(data, deviceName, startDate,
 }
 
 const getDevices = function() {
+    ///////////////////////////////////
+    //// Get Devices and Populate ////
+    /////////////////////////////////
+
     const http = self.ctx.http;
 
     // Load multiple devices
@@ -631,6 +736,9 @@ const formatJsonData = function(valueString) {
 }
 
 const formatSecondsTime = function(seconds) {
+    ///////////////////////////////
+    //// Convert s to hh:mm:ss ////
+    //////////////////////////////
     var hrs = Math.trunc(seconds / 3600);
     var mins = Math.trunc((seconds % 3600) / 60);
     var secs = Math.trunc(seconds % 60);
