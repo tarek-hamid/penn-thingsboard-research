@@ -14,7 +14,7 @@ self.onInit = function() {
             "report");
 
     getDevices();
-
+    
     downloadButton.onclick = function() {
         var action = "download";
         buttonClickAction(action);
@@ -24,6 +24,7 @@ self.onInit = function() {
         var action = "generate report";
         buttonClickAction(action);
     };
+    
 };
 
 self.onDestroy = function() {};
@@ -88,7 +89,7 @@ const buttonClickAction = function(action) {
                     .textContent = 'No Data';
             }
             else {
-                downloadData(dataToCsv(data),
+                downloadData(dataToCsv(data, deviceName),
                     deviceName,
                     startDate, endDate);
             }
@@ -213,13 +214,24 @@ const analyzeData = function(data) {
 
     const splitByDay = {};
     const splitByWeek = {};
+    
+    // exclude 0 SpO2
+    const finalData = [];
+    for(let i = data.data.length - 1; i >= 0; i--) {
+        const ts = data.data[i].ts;
+        const values = JSON.parse(data.data[i].value);
+        if (!values.hasOwnProperty('SpO2')) continue;
+        const SpO2 = parseInt(values.SpO2);
+        if (isNaN(SpO2) || SpO2 === 0) continue;
+        finalData.push({ts, SpO2});
+    }
 
     var sum = 0,
-        dataLength = data.data.length;
+        dataLength = finalData.length;
     var spo2Values = [];
 
-    startTime = data.data[dataLength - 1].ts,
-        endTime = data.data[0].ts;
+    startTime = finalData[0].ts,
+        endTime = finalData.slice(-1)[0].ts;
 
     var highQualityData = [],
         lowQualityData = [];
@@ -227,26 +239,24 @@ const analyzeData = function(data) {
     ////////////////////////
     /// Saturation Rates ///
     ///////////////////////
-    let prev_dt;
-    let prev_v;
-    let prev_prev_v;
+    let prev_dt = null;
+    let prev_v = null;
+    let prev_prev_v = null;
     let temp_v = [];
     
     let temp_80 = [];
     let temp_85 = [];
-    let direct_prev_dt;
+    let direct_prev_dt = null;
     
-    for (i = dataLength - 1; i >= 0; i--) {
-        const dt = data.data[i].ts;
-        const value = JSON.parse(data.data[i].value);
-        if (!value.hasOwnProperty('SpO2')) continue;
-        const val = parseInt(value.SpO2);
+    for (let i = 0; i < dataLength; i++) {
+        const dt = finalData[i].ts;
+        const val = finalData[i].SpO2;
 
         const dayKey = moment(dt).format('MM/DD/YYYY');
         if (!splitByDay[dayKey]) {
             splitByDay[dayKey] = [];
         }
-
+        
         // check SpO2 value //
         if (val < 80) {
             dataBySat.below80.push(val);
@@ -273,7 +283,7 @@ const analyzeData = function(data) {
 
         // Check high, low quality data
         if (dt === endTime) { // last data?
-            if (prev_v && prev_dt && prev_v === val && (dt - prev_dt) <= MIN_HQ_THR_MS && temp_v.length > 0) {
+            if (prev_v != null && prev_dt != null && prev_v === val && (dt - prev_dt) <= MIN_HQ_THR_MS && temp_v.length > 0) {
                 temp_v.push({dt, val});
                 const delta_t = temp_v.slice(-1)[0].dt - temp_v[0].dt;
                 if (delta_t > MIN_HQ_THR_MS) {
@@ -281,11 +291,15 @@ const analyzeData = function(data) {
                 }
             }
         }
-        else if (!prev_v || !prev_dt
+        else if (prev_v == null || prev_dt == null
             || (dt - prev_dt) > MIN_DIFF_IN_MS
             || prev_v !== val) {
-                
-            if (temp_v.length > 0) {
+            
+            if (temp_v.length === 0) {
+                temp_v = [{dt, val}];
+                prev_v = val;
+            }
+            else {
                 const delta_t = temp_v.slice(-1)[0].dt - temp_v[0].dt;
                 if (delta_t > MIN_HQ_THR_MS) {
                     temp_v.forEach(tv => highQualityData.push(tv.val));
@@ -293,19 +307,19 @@ const analyzeData = function(data) {
                 else if (delta_t < MAX_LQ_THR_MS && val === prev_prev_v) {
                     temp_v.forEach(tv => lowQualityData.push(tv.val));
                 }
+
+                temp_v = [{dt, val}];
+                prev_dt = dt;
+    
+                if (dt - prev_dt > MIN_DIFF_IN_MS) {
+                    prev_prev_v = null;
+                }
+                else {
+                    prev_prev_v = prev_v;
+                }
+                
+                prev_v = val;
             }
-            
-            temp_v = [{dt, val}];
-            prev_dt = dt;
-            
-            if (dt - prev_dt > MIN_DIFF_IN_MS) {
-                prev_prev_v = undefined;
-            }
-            else {
-                prev_prev_v = prev_v;
-            }
-            
-            prev_v = val;
         }
         else if (prev_v === val) {
             temp_v.push({dt, val});
@@ -326,7 +340,7 @@ const analyzeData = function(data) {
             appendByDuration(total85ByDuration, temp_85);
             temp_85 = [];
         }
-        else if (!direct_prev_dt || (direct_prev_dt - dt) < MIN_DIFF_IN_MS) {
+        else if (direct_prev_dt != null || (dt - direct_prev_dt) < MIN_DIFF_IN_MS) {
             if (val < 80) {
                 temp_80.push(dt);
                 temp_85.push(dt);
@@ -391,8 +405,8 @@ const analyzeData = function(data) {
 
     for (i = 0; i < spo2Values.length; i++) {
         var squaredDiff = Math.pow((spo2Values[i] -
-            mean), 2)
-        standardDeviation += squaredDiff
+            mean), 2);
+        standardDeviation += squaredDiff;
     }
 
     standardDeviation = Math.sqrt((standardDeviation /
@@ -402,49 +416,48 @@ const analyzeData = function(data) {
     //// Push to rows ////
     ///////////////////////
 
-    var newRow = "Analysis Result "
-    csvRows.push(newRow)
+    var newRow = "Analysis Result ";
+    csvRows.push(newRow);
 
-    csvRows.push(',')
+    csvRows.push(',');
 
-    newRow = 'Total Number of Data: ,'
-    newRow += dataLength
-    csvRows.push(newRow)
+    newRow = 'Total Number of Data: ,';
+    newRow += dataLength;
+    csvRows.push(newRow);
 
-    newRow = 'Days: ,'
-    newRow += Math.round((endTime - startTime) /
-        86400000)
-    csvRows.push(newRow)
+    newRow = 'Days: ,';
+    newRow += Object.keys(splitByDay).length;
+    csvRows.push(newRow);
 
-    newRow = 'Mean: ,'
-    newRow += mean.toFixed(2)
-    csvRows.push(newRow)
+    newRow = 'Mean: ,';
+    newRow += mean.toFixed(2);
+    csvRows.push(newRow);
 
-    newRow = 'Std: ,'
-    newRow += standardDeviation
-    csvRows.push(newRow)
+    newRow = 'Std: ,';
+    newRow += standardDeviation;
+    csvRows.push(newRow);
 
-    newRow = 'High Quality,Number of Data: '
-    newRow += highQualityData.length + ','
-    newRow += 'Percentage: '
+    newRow = 'High Quality,Number of Data: ';
+    newRow += highQualityData.length + ',';
+    newRow += 'Percentage: ';
     newRow += (highQualityData.length / dataLength * 100)
-        .toFixed(2)
-    newRow += ' %'
-    csvRows.push(newRow)
-
-    newRow = 'Low Quality,Number of Data: '
-    newRow += lowQualityData.length + ','
-    newRow += 'Percentage: '
+        .toFixed(2);
+    newRow += ' %';
+    csvRows.push(newRow);
+    
+    newRow = 'Low Quality,Number of Data: ';
+    newRow += lowQualityData.length + ',';
+    newRow += 'Percentage: ';
     newRow += (lowQualityData.length / dataLength * 100)
-        .toFixed(2)
-    newRow += ' %'
-    csvRows.push(newRow)
+        .toFixed(2);
+    newRow += ' %';
+    csvRows.push(newRow);
 
-    csvRows.push(',')
+    csvRows.push(',');
 
     // dump saturations
     newRow = 'Saturation Times'
-    csvRows.push(newRow)
+    csvRows.push(newRow);
     
     csvRows.push(dumpSaturationTimes('< 80%', dataBySat.below80, dataLength));
     csvRows.push(dumpSaturationTimes('< 85%', dataBySat.below85, dataLength));
@@ -462,13 +475,13 @@ const analyzeData = function(data) {
     csvRows = csvRows.concat(dumpSatWithDuration('< 85% - >= 30 sec', total85ByDuration.over30s, dataLength));
     csvRows = csvRows.concat(dumpSatWithDuration('< 85% - >= 60 sec', total85ByDuration.over60s, dataLength));
 
-    csvRows.push(',')
+    csvRows.push(',');
 
-    newRow = 'Data Collected Time'
-    csvRows.push(newRow)
+    newRow = 'Data Collected Time';
+    csvRows.push(newRow);
 
-    newRow = 'Per Day'
-    csvRows.push(newRow)
+    newRow = 'Per Day';
+    csvRows.push(newRow);
 
     let totalDuration = 0;
     for (let dayKey in splitByDay) {
@@ -504,34 +517,79 @@ const analyzeData = function(data) {
     return csvRows.join('\n');
 }
 
-const dataToCsv = function(data) {
+const dataToCsv = function(data, deviceName) {
     const csvRows = [];
 
-    // get headers and populate csvRows
-    var headers = Object.keys(data.data[0])[0]
-    var unformattedHeaders = data.data[0].value
-    var additionalHeaders = formatJsonData(
-        unformattedHeaders)
-    for (const key in additionalHeaders) {
-        newHeader = additionalHeaders[key].split(':')[0]
-        headers += ',' + newHeader
+    const dongle = deviceName.replace('RePulmoDongle#','');
+
+    //const fields = ['SN', 'SpO2', 'BPM', 'PI', 'SPCO', 'SPMET', 'DESAT', 'PIDELTA', 'ALARM', 'EXC'];
+    const fields = ['SpO2', 'ALARM', 'EXC'];
+    
+    //const headers = ['time_milliseconds', 'dongle', 'Serial_Number', 'SPO2', 'BPM', 'PI', 'SPCO', 'SPMET', 'DESAT', 'PIDELTA'];
+    const headers = ['time_milliseconds', 'dongle', 'SPO2'];
+    
+    const alarmHeaders = ["ALARM_NoAlarm","ALARM_Spo2High","ALARM_Spo2Low","ALARM_HighPulse","ALARM_LowPulse","ALARM_Active","ALARM_Silenced","ALARM_LowBattery","ALARM_Reserved"];
+    const excHeaders = ["EXC_Normal","EXC_NoSensor","EXC_DefectiveSensor","EXC_LowPerfusion","EXC_PulseSearch","EXC_Interference","EXC_SensorOff","EXC_AmbientLight","EXC_UnrecogSensor","EXC_Reserved100","EXC_Reserved200","EXC_LowSignalIQ","EXC_MasimoSet"];
+    
+    csvRows.push([headers.join(','), alarmHeaders.join(','), excHeaders.join(',')].join(','));
+
+    for (let i = data.data.length - 1; i >= 0; i--) {
+        const ts = data.data[i].ts;
+        const values = JSON.parse(data.data[i].value);
+
+        const row = [ts,dongle];
+        fields.forEach((key) => {
+            if(key === 'ALARM'){
+                row.push(parseAlarm(values["ALARM"]));
+            } else if (key === 'EXC'){
+                row.push(parseEXC(values["EXC"]));
+            } else { 
+                row.push(values[key]);
+            }
+        }); 
+        
+        csvRows.push(row.join(','));
     }
+    
+    return csvRows.join('\n');
+}
 
-    csvRows.push(headers)
+const parseAlarm = function(code) {
+    const hexcode = parseInt(code, 16);
+    
+    const noalarm = hexcode === 0 ? 1 : 0; 
 
-    // populate CSV with data
-    for (i = data.data.length - 1; i >= 1; i--) {
-        var newRow = moment(data.data[i].ts).format(
-            'YYYY-MM-DD HH:mm:ss')
-        var value = formatJsonData(data.data[i].value)
-        for (const key in value) {
-            var newValue = value[key].split(':')[1]
-            newRow += ',' + newValue
-        }
-        csvRows.push(newRow)
-    }
+    var highSpo2 = (hexcode & 0x01) === 0x01 ? 1 : 0,
+        lowSpo2 = (hexcode & 0x02) === 0x02 ? 1 : 0,
+        highPulse = (hexcode & 0x04) === 0x04 ? 1 : 0,
+        lowPulse = (hexcode & 0x08) === 0x08 ? 1 : 0,
+        alarmActive = (hexcode & 0x10) === 0x10 ? 1 : 0,
+        alarmSilenced = (hexcode & 0x20) === 0x20 ? 1 : 0,
+        lowBattery = (hexcode & 0x40) === 0x40 ? 1 : 0,
+        reserved = (hexcode & 0x80) === 0x80 ? 1 : 0;
+    
+    return [noalarm, highSpo2, lowSpo2, highPulse, lowPulse, alarmActive, alarmSilenced, lowBattery, reserved].join(',');
+}
 
-    return csvRows.join('\n')
+const parseEXC = function(code) {
+    const hexcode = parseInt(code, 16);
+    
+    const excNormal = hexcode === 0 ? 1 : 0; 
+
+    var noSensor = (hexcode & 0x001) === 0x001 ? 1 : 0,
+        defectiveSensor = (hexcode & 0x002) === 0x002 ? 1 : 0,
+        lowPerfusion = (hexcode & 0x004) === 0x004 ? 1 : 0,
+        pulseSearch = (hexcode & 0x08) === 0x08 ? 1 : 0,
+        interference = (hexcode & 0x010) === 0x010 ? 1 : 0,
+        sensorOff = (hexcode & 0x020) === 0x020 ? 1 : 0,
+        ambientLight = (hexcode & 0x040) === 0x040 ? 1 : 0,
+        unrecogSensor = (hexcode & 0x080) === 0x080 ? 1 : 0,
+        reserved100 = (hexcode & 0x100) === 0x100 ? 1 : 0,
+        reserved200 = (hexcode & 0x200) === 0x200 ? 1 : 0,
+        lowSignalIQ = (hexcode & 0x400) === 0x400 ? 1 : 0,
+        masimoSet = (hexcode & 0x800) === 0x800 ? 1 : 0;
+    
+    return [excNormal, noSensor, defectiveSensor, lowPerfusion, pulseSearch, interference, sensorOff, ambientLight, unrecogSensor, reserved100, reserved200, lowSignalIQ, masimoSet].join(',');
 }
 
 const downloadData = function(data, deviceName, startDate,
@@ -560,12 +618,12 @@ const downloadData = function(data, deviceName, startDate,
     document.body.removeChild(a);
 
     // Reset card
-    $("#download").removeAttr('disabled')
-    $("#report").removeAttr('disabled')
-    $("#select").removeAttr('disabled')
-    $("#datePicker").removeAttr('disabled')
+    $("#download").removeAttr('disabled');
+    $("#report").removeAttr('disabled');
+    $("#select").removeAttr('disabled');
+    $("#datePicker").removeAttr('disabled');
     document.getElementById("user-interaction")
-        .textContent = ''
+        .textContent = '';
 }
 
 const getDevices = function() {
@@ -581,38 +639,14 @@ const getDevices = function() {
 
     deviceQuery.forEach((devices) => {
         devices.data.forEach((device) => {
-            const deviceName = String(
-                    device.name),
-                deviceId = String(device
-                    .id.id)
-
-            var option = document
-                .createElement(
-                    "option");
-            option.value = deviceId;
-            option.innerHTML =
-                deviceName;
-            select.appendChild(option);
+            const deviceName = String(device.name),
+                deviceId = String(device.id.id);
+            if (deviceName.startsWith('RePulmoDongle#')) {
+                var option = document.createElement("option");
+                option.value = deviceId;
+                option.innerHTML = deviceName;
+                select.appendChild(option);
+            }
         });
     });
-}
-
-const formatJsonData = function(valueString) {
-    return valueString.replace(/"/g, '').replace(/{/g,
-        '').replace(/}/g, '').split(',')
-}
-
-const formatSecondsTime = function(seconds) {
-    ///////////////////////////////
-    //// Convert s to hh:mm:ss ////
-    //////////////////////////////
-    var hrs = Math.trunc(seconds / 3600);
-    var mins = Math.trunc((seconds % 3600) / 60);
-    var secs = Math.trunc(seconds % 60);
-
-    var ret = "";
-    ret += "" + hrs + ":" + (mins < 10 ? "0" : "");
-    ret += "" + mins + ":" + (secs < 10 ? "0" : "");
-    ret += "" + secs;
-    return ret;
-}
+};
